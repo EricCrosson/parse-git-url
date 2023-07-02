@@ -1,4 +1,5 @@
 use git_url_parse::*;
+
 #[test]
 fn ssh_user_ports() {
     let test_url = "ssh://git@host.tld:9999/user/project-name.git";

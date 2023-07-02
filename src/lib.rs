@@ -2,34 +2,12 @@ use regex::Regex;
 use std::fmt::Display;
 use std::str::FromStr;
 use std::{error::Error, fmt};
-use strum_macros::{Display, EnumString, EnumVariantNames};
 use tracing::debug;
 use url::Url;
 
-/// Supported uri schemes for parsing
-#[derive(Debug, PartialEq, Eq, EnumString, EnumVariantNames, Clone, Display, Copy)]
-#[strum(serialize_all = "kebab_case")]
-pub enum Scheme {
-    /// Represents `file://` url scheme
-    File,
-    /// Represents `ftp://` url scheme
-    Ftp,
-    /// Represents `ftps://` url scheme
-    Ftps,
-    /// Represents `git://` url scheme
-    Git,
-    /// Represents `git+ssh://` url scheme
-    #[strum(serialize = "git+ssh")]
-    GitSsh,
-    /// Represents `http://` url scheme
-    Http,
-    /// Represents `https://` url scheme
-    Https,
-    /// Represents `ssh://` url scheme
-    Ssh,
-    /// Represents No url scheme
-    Unspecified,
-}
+mod scheme;
+
+pub use crate::scheme::Scheme;
 
 /// GitUrl represents an input url that is a url used by git
 /// Internally during parsing the url is sanitized and uses the `url` crate to perform
@@ -300,7 +278,7 @@ impl GitUrl {
                                 return Err(FromStrError {
                                     url: url.to_owned(),
                                     kind: FromStrErrorKind::UnsupportedScheme,
-                                })
+                                });
                             }
                         }
                     }
@@ -432,6 +410,7 @@ impl Display for NormalizeUrlError {
             NormalizeUrlErrorKind::UnsupportedSshPattern { url } => {
                 write!(f, "unsupported SSH pattern `{}`", url)
             }
+            NormalizeUrlErrorKind::UnsupportedScheme => write!(f, "unsupported URL scheme"),
         }
     }
 }
@@ -442,6 +421,7 @@ impl Error for NormalizeUrlError {
             NormalizeUrlErrorKind::NullBytes => None,
             NormalizeUrlErrorKind::UrlParse(err) => Some(err),
             NormalizeUrlErrorKind::UnsupportedSshPattern { url: _ } => None,
+            NormalizeUrlErrorKind::UnsupportedScheme => None,
         }
     }
 }
@@ -454,6 +434,8 @@ pub enum NormalizeUrlErrorKind {
     UrlParse(url::ParseError),
     #[non_exhaustive]
     UnsupportedSshPattern { url: String },
+    #[non_exhaustive]
+    UnsupportedScheme,
 }
 
 /// `normalize_url` takes in url as `&str` and takes an opinionated approach to identify
@@ -487,16 +469,10 @@ pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
     let url_parse = Url::parse(&url_to_parse);
 
     Ok(match url_parse {
-        Ok(u) => {
-            match Scheme::from_str(u.scheme()) {
-                Ok(_p) => u,
-                Err(_e) => {
-                    // Catch case when an ssh url is given w/o a user
-                    debug!("Scheme parse fail. Assuming a userless ssh url");
-                    normalize_ssh_url(trim_url)?
-                }
-            }
-        }
+        Ok(u) => match Scheme::from_str(u.scheme()) {
+            Ok(_) => u,
+            Err(_) => normalize_ssh_url(trim_url)?,
+        },
         Err(url::ParseError::RelativeUrlWithoutBase) => {
             // If we're here, we're only looking for Scheme::Ssh or Scheme::File
 

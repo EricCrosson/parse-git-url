@@ -17,8 +17,6 @@ version = "0.4.4"
 [dependencies]
 tracing = "0.1"
 url = "^2.2"
-strum = "^0.24"
-strum_macros = "^0.24"
 regex = "^1.4"
 
 [dev-dependencies]
