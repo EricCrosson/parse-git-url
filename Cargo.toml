@@ -1,5 +1,8 @@
 [package]
-authors = ["T.J. Telan <t.telan@gmail.com>"]
+authors = [
+  "T.J. Telan <t.telan@gmail.com>",
+  "Eric Crosson <eric.s.crosson@utexas.edu>"
+]
 categories = ["parser-implementations", "encoding"]
 description = "A parser for git repo urls based on url crate"
 documentation = "https://docs.rs/git-url-parse"
