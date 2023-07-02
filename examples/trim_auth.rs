@@ -1,7 +1,6 @@
-use color_eyre::Result;
 use git_url_parse::GitUrl;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     env_logger::init();
 
     let test_vec = vec![

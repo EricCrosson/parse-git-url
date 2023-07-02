@@ -1,8 +1,7 @@
-use color_eyre::eyre::{eyre, WrapErr};
-pub use color_eyre::Result;
 use regex::Regex;
-use std::fmt;
+use std::fmt::Display;
 use std::str::FromStr;
+use std::{error::Error, fmt};
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use tracing::debug;
 use url::Url;
@@ -135,8 +134,57 @@ impl Default for GitUrl {
     }
 }
 
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct FromStrError {
+    url: String,
+    kind: FromStrErrorKind,
+}
+
+impl Display for FromStrError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            FromStrErrorKind::NormalizeUrl(_) => {
+                write!(f, "unable to normalize URL `{}`", self.url)
+            }
+            FromStrErrorKind::UrlHost => {
+                write!(f, "could not isolate host from URL `{}`", self.url)
+            }
+            FromStrErrorKind::UnsupportedScheme => {
+                write!(f, "unsupported scheme`",)
+            }
+            FromStrErrorKind::MalformedGitUrl => {
+                write!(f, "unknown format of git URL `{}`", self.url)
+            }
+        }
+    }
+}
+
+impl Error for FromStrError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.kind {
+            FromStrErrorKind::NormalizeUrl(err) => Some(err),
+            FromStrErrorKind::UrlHost => None,
+            FromStrErrorKind::UnsupportedScheme => None,
+            FromStrErrorKind::MalformedGitUrl => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum FromStrErrorKind {
+    #[non_exhaustive]
+    NormalizeUrl(NormalizeUrlError),
+    #[non_exhaustive]
+    UrlHost,
+    #[non_exhaustive]
+    UnsupportedScheme,
+    #[non_exhaustive]
+    MalformedGitUrl,
+}
+
 impl FromStr for GitUrl {
-    type Err = color_eyre::Report;
+    type Err = FromStrError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         GitUrl::parse(s)
@@ -153,15 +201,20 @@ impl GitUrl {
         new_giturl
     }
 
-    /// Returns a `Result<GitUrl>` after normalizing and parsing `url` for metadata
-    pub fn parse(url: &str) -> Result<GitUrl> {
+    /// Normalizes and parses `url` for metadata
+    pub fn parse(url: &str) -> Result<GitUrl, FromStrError> {
         // Normalize the url so we can use Url crate to process ssh urls
-        let normalized = normalize_url(url)
-            .with_context(|| "Url normalization into url::Url failed".to_string())?;
+        let normalized = normalize_url(url).map_err(|err| FromStrError {
+            url: url.to_owned(),
+            kind: FromStrErrorKind::NormalizeUrl(err),
+        })?;
 
         // Some pre-processing for paths
-        let scheme = Scheme::from_str(normalized.scheme())
-            .with_context(|| format!("Scheme unsupported: {:?}", normalized.scheme()))?;
+        // REFACTOR: write Scheme::from_str explicitly and include that error in the chain
+        let scheme = Scheme::from_str(normalized.scheme()).map_err(|_err| FromStrError {
+            url: url.to_owned(),
+            kind: FromStrErrorKind::UnsupportedScheme,
+        })?;
 
         // Normalized ssh urls can always have their first '/' removed
         let urlpath = match &scheme {
@@ -201,9 +254,10 @@ impl GitUrl {
                 let hosts_w_organization_in_path = vec!["dev.azure.com", "ssh.dev.azure.com"];
                 //vec!["dev.azure.com", "ssh.dev.azure.com", "visualstudio.com"];
 
-                let host_str = normalized
-                    .host_str()
-                    .ok_or(eyre!("Host from URL could not be represented as str"))?;
+                let host_str = normalized.host_str().ok_or_else(|| FromStrError {
+                    url: url.to_owned(),
+                    kind: FromStrErrorKind::UrlHost,
+                })?;
 
                 match hosts_w_organization_in_path.contains(&host_str) {
                     true => {
@@ -242,16 +296,29 @@ impl GitUrl {
                                     fullname.join("/"),
                                 )
                             }
-                            _ => return Err(eyre!("Scheme not supported for host")),
+                            _ => {
+                                return Err(FromStrError {
+                                    url: url.to_owned(),
+                                    kind: FromStrErrorKind::UnsupportedScheme,
+                                })
+                            }
                         }
                     }
                     false => {
                         if !url.starts_with("ssh") && splitpath.len() < 2 {
-                            return Err(eyre!("git url is not of expected format"));
+                            return Err(FromStrError {
+                                url: url.to_owned(),
+                                kind: FromStrErrorKind::MalformedGitUrl,
+                            });
                         }
 
                         let position = match splitpath.len() {
-                            0 => return Err(eyre!("git url is not of expected format")),
+                            0 => {
+                                return Err(FromStrError {
+                                    url: url.to_owned(),
+                                    kind: FromStrErrorKind::MalformedGitUrl,
+                                })
+                            }
                             1 => 0,
                             _ => 1,
                         };
@@ -313,7 +380,7 @@ impl GitUrl {
 /// Prepends `ssh://` to url
 ///
 /// Supports absolute and relative paths
-fn normalize_ssh_url(url: &str) -> Result<Url> {
+fn normalize_ssh_url(url: &str) -> Result<Url, NormalizeUrlError> {
     let u = url.split(':').collect::<Vec<&str>>();
 
     match u.len() {
@@ -325,7 +392,11 @@ fn normalize_ssh_url(url: &str) -> Result<Url> {
             debug!("Normalizing ssh url with ports: {:?}", u);
             normalize_url(&format!("ssh://{}:{}/{}", u[0], u[1], u[2]))
         }
-        _default => Err(eyre!("SSH normalization pattern not covered for: {:?}", u)),
+        _default => Err(NormalizeUrlError {
+            kind: NormalizeUrlErrorKind::UnsupportedSshPattern {
+                url: url.to_owned(),
+            },
+        }),
     }
 }
 
@@ -333,13 +404,12 @@ fn normalize_ssh_url(url: &str) -> Result<Url> {
 ///
 /// Prepends `file://` to url
 #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
-fn normalize_file_path(filepath: &str) -> Result<Url> {
+fn normalize_file_path(filepath: &str) -> Result<Url, NormalizeUrlError> {
     let fp = Url::from_file_path(filepath);
 
     match fp {
         Ok(path) => Ok(path),
-        Err(_e) => Ok(normalize_url(&format!("file://{}", filepath))
-            .with_context(|| "file:// normalization failed".to_string())?),
+        Err(_e) => normalize_url(&format!("file://{}", filepath)),
     }
 }
 
@@ -348,24 +418,65 @@ fn normalize_file_path(_filepath: &str) -> Result<Url> {
     unreachable!()
 }
 
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct NormalizeUrlError {
+    kind: NormalizeUrlErrorKind,
+}
+
+impl Display for NormalizeUrlError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            NormalizeUrlErrorKind::NullBytes => write!(f, "input URL contains null bytes"),
+            NormalizeUrlErrorKind::UrlParse(_) => write!(f, "unable to parse URL"),
+            NormalizeUrlErrorKind::UnsupportedSshPattern { url } => {
+                write!(f, "unsupported SSH pattern `{}`", url)
+            }
+        }
+    }
+}
+
+impl Error for NormalizeUrlError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match &self.kind {
+            NormalizeUrlErrorKind::NullBytes => None,
+            NormalizeUrlErrorKind::UrlParse(err) => Some(err),
+            NormalizeUrlErrorKind::UnsupportedSshPattern { url: _ } => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum NormalizeUrlErrorKind {
+    #[non_exhaustive]
+    NullBytes,
+    #[non_exhaustive]
+    UrlParse(url::ParseError),
+    #[non_exhaustive]
+    UnsupportedSshPattern { url: String },
+}
+
 /// `normalize_url` takes in url as `&str` and takes an opinionated approach to identify
 /// `ssh://` or `file://` urls that require more information to be added so that
 /// they can be parsed more effectively by `url::Url::parse()`
-pub fn normalize_url(url: &str) -> Result<Url> {
+pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
     debug!("Processing: {:?}", &url);
 
     // Error if there are null bytes within the url
     // https://github.com/tjtelan/git-url-parse-rs/issues/16
     if url.contains('\0') {
-        return Err(eyre!("Found null bytes within input url before parsing"));
+        return Err(NormalizeUrlError {
+            kind: NormalizeUrlErrorKind::NullBytes,
+        });
     }
 
     // We're going to remove any trailing slash before running through Url::parse
     let trim_url = url.trim_end_matches('/');
 
+    // TODO: build regex once using once_cell
     // normalize short git url notation: git:host/path
     let url_to_parse = if Regex::new(r"^git:[^/]")
-        .with_context(|| "Failed to build short git url regex for testing against url".to_string())?
+        .expect("regex should compile")
         .is_match(trim_url)
     {
         trim_url.replace("git:", "git://")
@@ -382,9 +493,7 @@ pub fn normalize_url(url: &str) -> Result<Url> {
                 Err(_e) => {
                     // Catch case when an ssh url is given w/o a user
                     debug!("Scheme parse fail. Assuming a userless ssh url");
-                    normalize_ssh_url(trim_url).with_context(|| {
-                        "No url scheme was found, then failed to normalize as ssh url.".to_string()
-                    })?
+                    normalize_ssh_url(trim_url)?
                 }
             }
         }
@@ -393,25 +502,24 @@ pub fn normalize_url(url: &str) -> Result<Url> {
 
             // Assuming we have found Scheme::Ssh if we can find an "@" before ":"
             // Otherwise we have Scheme::File
-            let re = Regex::new(r"^\S+(@)\S+(:).*$").with_context(|| {
-                "Failed to build ssh git url regex for testing against url".to_string()
-            })?;
+            // TODO: build regex once using once_cell
+            let re = Regex::new(r"^\S+(@)\S+(:).*$").expect("regex should compile");
 
             match re.is_match(trim_url) {
                 true => {
                     debug!("Scheme::SSH match for normalization");
-                    normalize_ssh_url(trim_url)
-                        .with_context(|| "Failed to normalize as ssh url".to_string())?
+                    normalize_ssh_url(trim_url)?
                 }
                 false => {
                     debug!("Scheme::File match for normalization");
-                    normalize_file_path(trim_url)
-                        .with_context(|| "Failed to normalize as file url".to_string())?
+                    normalize_file_path(trim_url)?
                 }
             }
         }
         Err(err) => {
-            return Err(eyre!("url parsing failed: {:?}", err));
+            return Err(NormalizeUrlError {
+                kind: NormalizeUrlErrorKind::UrlParse(err),
+            });
         }
     })
 }

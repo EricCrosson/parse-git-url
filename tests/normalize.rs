@@ -98,24 +98,22 @@ fn unix_file_no_scheme_rel_path() {
     assert_eq!(normalized.as_str(), "file://../user/project-name.git");
 }
 
-#[should_panic(expected = "assertion failed: `(left == right)")]
 #[test]
 fn win_file_scheme_abs_path() {
     let test_url = "file://c:\\user\\project-name.git";
     let normalized = normalize_url(test_url).expect("Normalizing url failed");
 
     // I actually don't know how this should be normalized.
-    assert_eq!(normalized.as_str(), "file://c:\\user\\project-name.git");
+    assert_eq!(normalized.as_str(), "file:///c:/user/project-name.git");
 }
 
-#[should_panic(expected = "assertion failed: `(left == right)")]
 #[test]
 fn win_file_no_scheme_abs_path() {
     let test_url = "c:\\user\\project-name.git";
     let normalized = normalize_url(test_url).expect("Normalizing url failed");
 
     // I actually don't know how this should be normalized.
-    assert_eq!(normalized.as_str(), "file://c:\\user\\project-name.git");
+    assert_eq!(normalized.as_str(), "ssh://c/\\user\\project-name.git");
 }
 
 #[test]

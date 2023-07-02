@@ -19,7 +19,6 @@ tracing = "0.1"
 url = "^2.2"
 strum = "^0.24"
 strum_macros = "^0.24"
-color-eyre = "^0.6"
 regex = "^1.4"
 
 [dev-dependencies]
