@@ -1,21 +1,18 @@
-# git-url-parse
+# parse-git-url
 
-![Minimum Supported Rust Version](https://raw.githubusercontent.com/tjtelan/git-url-parse-rs/main/.github/assets/msrv-badge.svg)
-[![Crates.io](https://img.shields.io/crates/v/git-url-parse)](https://crates.io/crates/git-url-parse)
-![Crates.io](https://img.shields.io/crates/d/git-url-parse)
-[![Github actions build status](https://github.com/tjtelan/git-url-parse-rs/workflows/git-url-parse/badge.svg)](https://github.com/tjtelan/git-url-parse-rs/actions/workflows/rust.yml)
-[![docs.rs](https://docs.rs/git-url-parse/badge.svg)](https://docs.rs/git-url-parse/)
-[![licence](https://img.shields.io/github/license/tjtelan/git-url-parse-rs)](LICENSE)
-![Maintenance](https://img.shields.io/maintenance/yes/2022)
+[![Build Status]](https://github.com/EricCrosson/parse-git-url/actions/workflows/release.yml)
+
+[build status]: https://github.com/EricCrosson/parse-git-url/actions/workflows/release.yml/badge.svg?event=push
 
 Supports common protocols as specified by the [Pro Git book](https://git-scm.com/book/en/v2)
 
 See: [4.1 Git on the Server - The Protocols](https://git-scm.com/book/en/v2/Git-on-the-Server-The-Protocols)
 
 Supports parsing SSH/HTTPS repo urls for:
-* Github
-* Bitbucket
-* Azure Devops
+
+- Github
+- Bitbucket
+- Azure Devops
 
 See [tests/parse.rs](tests/parse.rs) for expected output for a variety of inputs.
 
@@ -31,7 +28,7 @@ Internally uses `Url::parse()` from the [Url](https://crates.io/crates/url) crat
 
 ```shell
 $ RUST_LOG=git_url_parse cargo run --example multi
-$ RUST_LOG=git_url_parse cargo run --example trim_auth 
+$ RUST_LOG=git_url_parse cargo run --example trim_auth
 ```
 
 ### Simple usage and output
@@ -50,6 +47,7 @@ fn main() {
 ```
 
 ### Example Output
+
 ```bash
 SSH: Ok(
     GitUrl {
@@ -94,3 +92,10 @@ HTTPS: Ok(
     },
 )
 ```
+
+## Acknowledgments
+
+This repository has been forked from [tjtelan/git-url-parse-rs].
+All credit goes to the original author.
+
+[tjtelan/git-url-parse-rs]: https://github.com/tjtelan/git-url-parse-rs
