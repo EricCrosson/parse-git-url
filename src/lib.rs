@@ -1,4 +1,3 @@
-use regex::Regex;
 use std::fmt::Display;
 use std::str::FromStr;
 use std::{error::Error, fmt};
@@ -453,17 +452,15 @@ pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
     }
 
     // We're going to remove any trailing slash before running through Url::parse
-    let trim_url = url.trim_end_matches('/');
+    let url = url.trim_end_matches('/');
 
-    // TODO: build regex once using once_cell
-    // normalize short git url notation: git:host/path
-    let url_to_parse = if Regex::new(r"^git:[^/]")
-        .expect("regex should compile")
-        .is_match(trim_url)
-    {
-        trim_url.replace("git:", "git://")
+    // Normalize short git url notation: git:host/path.
+    // This is the same as matching Regex::new(r"^git:[^/]")
+    let url_starts_with_git_but_no_slash = url.starts_with("git:") && url.get(4..5) != Some("/");
+    let url_to_parse = if url_starts_with_git_but_no_slash {
+        url.replace("git:", "git://")
     } else {
-        trim_url.to_string()
+        url.to_string()
     };
 
     let url_parse = Url::parse(&url_to_parse);
@@ -471,24 +468,21 @@ pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
     Ok(match url_parse {
         Ok(u) => match Scheme::from_str(u.scheme()) {
             Ok(_) => u,
-            Err(_) => normalize_ssh_url(trim_url)?,
+            Err(_) => normalize_ssh_url(url)?,
         },
         Err(url::ParseError::RelativeUrlWithoutBase) => {
             // If we're here, we're only looking for Scheme::Ssh or Scheme::File
 
             // Assuming we have found Scheme::Ssh if we can find an "@" before ":"
             // Otherwise we have Scheme::File
-            // TODO: build regex once using once_cell
-            let re = Regex::new(r"^\S+(@)\S+(:).*$").expect("regex should compile");
-
-            match re.is_match(trim_url) {
+            match string_contains_asperand_before_colon(url) {
                 true => {
                     debug!("Scheme::SSH match for normalization");
-                    normalize_ssh_url(trim_url)?
+                    normalize_ssh_url(url)?
                 }
                 false => {
                     debug!("Scheme::File match for normalization");
-                    normalize_file_path(trim_url)?
+                    normalize_file_path(url)?
                 }
             }
         }
@@ -498,4 +492,15 @@ pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
             });
         }
     })
+}
+
+/// This is the same as matching Regex::new(r"^\S+(@)\S+(:).*$");
+fn string_contains_asperand_before_colon(str: &str) -> bool {
+    let index_of_asperand = str.find('@');
+    let index_of_colon = str.find(':');
+
+    match (index_of_asperand, index_of_colon) {
+        (Some(index_of_asperand), Some(index_of_colon)) => index_of_asperand < index_of_colon,
+        _ => false,
+    }
 }

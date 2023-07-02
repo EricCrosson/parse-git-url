@@ -17,7 +17,6 @@ version = "0.4.4"
 [dependencies]
 tracing = "0.1"
 url = "^2.2"
-regex = "^1.4"
 
 [dev-dependencies]
 env_logger = "^0.9"
