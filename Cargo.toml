@@ -1,5 +1,5 @@
 [package]
-name = "git-url-parse"
+name = "parse-git-url"
 version = "0.4.4"
 edition = "2021"
 authors = [
@@ -13,7 +13,7 @@ homepage = "https://github.com/EricCrosson/parse-git-url"
 repository = "https://github.com/EricCrosson/parse-git-url"
 keywords = ["parse", "git", "url"]
 categories = ["parser-implementations", "encoding"]
-documentation = "https://docs.rs/git-url-parse"
+documentation = "https://docs.rs/parse-git-url"
 exclude = [
   "/.envrc",
   "/.github",
