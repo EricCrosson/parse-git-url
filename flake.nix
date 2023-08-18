@@ -107,6 +107,7 @@
           nativeBuildInputs = [
             fenix-toolchain
             fenix.packages.${system}.rust-analyzer
+            nixpkgs.legacyPackages.${system}.libiconv
           ];
 
           PROPTEST_CASES = 1000;
