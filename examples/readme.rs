@@ -1,4 +1,4 @@
-use git_url_parse::GitUrl;
+use parse_git_url::GitUrl;
 
 fn main() {
     println!(

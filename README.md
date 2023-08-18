@@ -27,8 +27,8 @@ Internally uses `Url::parse()` from the [Url](https://crates.io/crates/url) crat
 ### Run example with debug output
 
 ```shell
-$ RUST_LOG=git_url_parse cargo run --example multi
-$ RUST_LOG=git_url_parse cargo run --example trim_auth
+$ RUST_LOG=parse_git_url cargo run --example multi
+$ RUST_LOG=parse_git_url cargo run --example trim_auth
 ```
 
 ### Simple usage and output
@@ -38,7 +38,7 @@ $ cargo run --example readme
 ```
 
 ```rust
-use git_url_parse::GitUrl;
+use parse_git_url::GitUrl;
 
 fn main() {
     println!("SSH: {:#?}", GitUrl::parse("git@github.com:tjtelan/git-url-parse-rs.git"));

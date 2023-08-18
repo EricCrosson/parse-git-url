@@ -26,7 +26,7 @@ exclude = [
 ]
 
 [lib]
-name = "git_url_parse"
+name = "parse_git_url"
 path = "src/lib.rs"
 
 

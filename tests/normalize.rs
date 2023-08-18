@@ -1,4 +1,4 @@
-use git_url_parse::*;
+use parse_git_url::*;
 
 // Url Normalization
 #[test]
