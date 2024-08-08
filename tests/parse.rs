@@ -156,6 +156,72 @@ fn https_user_auth_github() {
 }
 
 #[test]
+fn https_user_gitlab() {
+    let test_url = "https://user@gitlab.com/user/repo.git";
+    let parsed = GitUrl::parse(test_url).expect("URL parse failed");
+    let expected = GitUrl {
+        host: Some("gitlab.com".to_string()),
+        name: "repo".to_string(),
+        owner: Some("user".to_string()),
+        organization: None,
+        fullname: "user/repo".to_string(),
+        scheme: Scheme::Https,
+        user: Some("user".to_string()),
+        token: None,
+        port: None,
+        path: "/user/repo.git".to_string(),
+        git_suffix: true,
+        scheme_prefix: true,
+    };
+
+    assert_eq!(parsed, expected);
+}
+
+#[test]
+fn ssh_user_gitlab() {
+    let test_url = "git@gitlab.com:user/repo.git";
+    let parsed = GitUrl::parse(test_url).expect("URL parse failed");
+    let expected = GitUrl {
+        host: Some("gitlab.com".to_string()),
+        name: "repo".to_string(),
+        owner: Some("user".to_string()),
+        organization: None,
+        fullname: "user/repo".to_string(),
+        scheme: Scheme::Ssh,
+        user: Some("git".to_string()),
+        token: None,
+        port: None,
+        path: "user/repo.git".to_string(),
+        git_suffix: true,
+        scheme_prefix: false,
+    };
+
+    assert_eq!(parsed, expected);
+}
+
+#[test]
+fn https_user_auth_gitlab() {
+    let test_url = "https://user:glpat-abc@gitlab.com/owner/name.git";
+    let parsed = GitUrl::parse(test_url).expect("URL parse failed");
+    let expected = GitUrl {
+        host: Some("gitlab.com".to_string()),
+        name: "name".to_string(),
+        owner: Some("owner".to_string()),
+        organization: None,
+        fullname: "owner/name".to_string(),
+        scheme: Scheme::Https,
+        user: Some("user".to_string()),
+        token: Some("glpat-abc".to_string()),
+        port: None,
+        path: "/owner/name.git".to_string(),
+        git_suffix: true,
+        scheme_prefix: true,
+    };
+
+    assert_eq!(parsed, expected);
+}
+
+#[test]
 fn ssh_user_azure_devops() {
     let test_url = "git@ssh.dev.azure.com:v3/CompanyName/ProjectName/RepoName";
     let parsed = GitUrl::parse(test_url).expect("URL parse failed");
