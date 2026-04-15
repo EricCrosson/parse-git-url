@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs";
     git-hooks = {
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -20,14 +20,35 @@
       "x86_64-linux"
     ];
 
-    forEachSystem = f: nixpkgs.lib.genAttrs systems (system: f system);
-  in {
-    packages = forEachSystem (system: let
+    forEachSystem = nixpkgs.lib.genAttrs systems;
+    perSystem = forEachSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
       src = builtins.path {
         path = ./.;
         name = "source";
       };
+      pre-commit-check = git-hooks.lib.${system}.run {
+        inherit src;
+        hooks = {
+          actionlint.enable = true;
+          alejandra = {
+            enable = true;
+            settings.verbosity = "quiet";
+          };
+          deadnix.enable = true;
+          prettier.enable = true;
+          rustfmt.enable = true;
+          statix.enable = true;
+          taplo.enable = true;
+        };
+        package = pkgs.prek;
+      };
+    in {
+      inherit pkgs src pre-commit-check;
+    });
+  in {
+    packages = forEachSystem (system: let
+      inherit (perSystem.${system}) pkgs src;
     in {
       default = pkgs.rustPlatform.buildRustPackage {
         pname = "parse-git-url";
@@ -38,42 +59,14 @@
     });
 
     checks = forEachSystem (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
-      src = builtins.path {
-        path = ./.;
-        name = "source";
-      };
-      pre-commit-check = git-hooks.lib.${system}.run {
-        inherit src;
-        hooks = {
-          actionlint.enable = true;
-          alejandra.enable = true;
-          prettier.enable = true;
-          rustfmt.enable = true;
-          taplo.enable = true;
-        };
-      };
+      inherit (perSystem.${system}) pre-commit-check;
     in {
-      default = self.packages.${system}.default;
+      inherit (self.packages.${system}) default;
       inherit pre-commit-check;
     });
 
     devShells = forEachSystem (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
-      src = builtins.path {
-        path = ./.;
-        name = "source";
-      };
-      pre-commit-check = git-hooks.lib.${system}.run {
-        inherit src;
-        hooks = {
-          actionlint.enable = true;
-          alejandra.enable = true;
-          prettier.enable = true;
-          rustfmt.enable = true;
-          taplo.enable = true;
-        };
-      };
+      inherit (perSystem.${system}) pkgs pre-commit-check;
     in {
       default = pkgs.mkShell {
         packages =
