@@ -79,6 +79,39 @@ fn https_user_auth_github() {
 }
 
 #[test]
+fn https_user_gitlab() {
+    let test_url = "https://user@gitlab.com/user/repo.git/";
+    let parsed_and_trimmed = GitUrl::parse(test_url)
+        .expect("URL parse failed")
+        .trim_auth();
+    let expected = "https://gitlab.com/user/repo.git";
+
+    assert_eq!(format!("{}", parsed_and_trimmed), expected);
+}
+
+#[test]
+fn ssh_user_gitlab() {
+    let test_url = "git@gitlab.com:user/repo.git";
+    let parsed_and_trimmed = GitUrl::parse(test_url)
+        .expect("URL parse failed")
+        .trim_auth();
+    let expected = "gitlab.com:user/repo.git";
+
+    assert_eq!(format!("{}", parsed_and_trimmed), expected);
+}
+
+#[test]
+fn https_user_auth_gitlab() {
+    let test_url = "https://token:x-oauth-basic@gitlab.com/owner/name.git/";
+    let parsed_and_trimmed = GitUrl::parse(test_url)
+        .expect("URL parse failed")
+        .trim_auth();
+    let expected = "https://gitlab.com/owner/name.git";
+
+    assert_eq!(format!("{}", parsed_and_trimmed), expected);
+}
+
+#[test]
 fn ssh_user_azure_devops() {
     let test_url = "git@ssh.dev.azure.com:v3/CompanyName/ProjectName/RepoName";
     let parsed_and_trimmed = GitUrl::parse(test_url)
