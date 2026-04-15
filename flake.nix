@@ -1,7 +1,6 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
     git-hooks = {
       url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -11,11 +10,34 @@
   outputs = {
     self,
     nixpkgs,
-    flake-utils,
     git-hooks,
     ...
-  }:
-    flake-utils.lib.eachDefaultSystem (system: let
+  }: let
+    systems = [
+      "aarch64-darwin"
+      "aarch64-linux"
+      "x86_64-darwin"
+      "x86_64-linux"
+    ];
+
+    forEachSystem = f: nixpkgs.lib.genAttrs systems (system: f system);
+  in {
+    packages = forEachSystem (system: let
+      pkgs = nixpkgs.legacyPackages.${system};
+      src = builtins.path {
+        path = ./.;
+        name = "source";
+      };
+    in {
+      default = pkgs.rustPlatform.buildRustPackage {
+        pname = "parse-git-url";
+        version = "0.4.4";
+        inherit src;
+        cargoHash = "sha256-RrQ3voW2YPLUE3I6RMDb7zCI4LRm85XNN9k8AHSpOUY=";
+      };
+    });
+
+    checks = forEachSystem (system: let
       pkgs = nixpkgs.legacyPackages.${system};
       src = builtins.path {
         path = ./.;
@@ -32,19 +54,28 @@
         };
       };
     in {
-      packages.default = pkgs.rustPlatform.buildRustPackage {
-        pname = "parse-git-url";
-        version = "0.4.4";
+      default = self.packages.${system}.default;
+      inherit pre-commit-check;
+    });
+
+    devShells = forEachSystem (system: let
+      pkgs = nixpkgs.legacyPackages.${system};
+      src = builtins.path {
+        path = ./.;
+        name = "source";
+      };
+      pre-commit-check = git-hooks.lib.${system}.run {
         inherit src;
-        cargoHash = "sha256-RrQ3voW2YPLUE3I6RMDb7zCI4LRm85XNN9k8AHSpOUY=";
+        hooks = {
+          actionlint.enable = true;
+          alejandra.enable = true;
+          prettier.enable = true;
+          rustfmt.enable = true;
+          taplo.enable = true;
+        };
       };
-
-      checks = {
-        default = self.packages.${system}.default;
-        inherit pre-commit-check;
-      };
-
-      devShells.default = pkgs.mkShell {
+    in {
+      default = pkgs.mkShell {
         packages =
           (with pkgs; [
             cargo
@@ -61,4 +92,5 @@
         inherit (pre-commit-check) shellHook;
       };
     });
+  };
 }
