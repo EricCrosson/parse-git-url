@@ -22,6 +22,12 @@ URLs that use the `ssh://` protocol (implicitly or explicitly) undergo a small n
 
 Internally uses `Url::parse()` from the [Url](https://crates.io/crates/url) crate after normalization.
 
+## Supported local paths
+
+- Unix absolute and relative paths are supported.
+- Relative Windows paths such as `..\\repo.git` are supported and normalized.
+- Absolute Windows drive paths such as `C:\\repo.git` and `file:///C:/repo.git` are intentionally unsupported.
+
 ## Examples
 
 ### Run example with debug output

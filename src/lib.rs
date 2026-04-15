@@ -1,3 +1,27 @@
+//! Parse Git repository URLs into a stable, documented Rust data structure.
+//!
+//! `GitUrl::parse` supports the host-specific layouts currently covered by the
+//! test suite and README: GitHub, Bitbucket, and Azure DevOps over SSH,
+//! HTTP(S), and related URL schemes. Local Unix paths and relative Windows
+//! paths are also supported.
+//!
+//! Absolute Windows drive paths such as `C:\repo.git` and
+//! `file:///C:/repo.git` are intentionally unsupported.
+//!
+//! # Examples
+//!
+//! ```
+//! use parse_git_url::{GitUrl, Scheme};
+//!
+//! let parsed = GitUrl::parse("git@github.com:tjtelan/git-url-parse-rs.git")
+//!     .expect("example URL should parse");
+//!
+//! assert_eq!(parsed.host.as_deref(), Some("github.com"));
+//! assert_eq!(parsed.owner.as_deref(), Some("tjtelan"));
+//! assert_eq!(parsed.name, "git-url-parse-rs");
+//! assert_eq!(parsed.scheme, Scheme::Ssh);
+//! ```
+//!
 use std::fmt::Display;
 use std::str::FromStr;
 use std::{error::Error, fmt};
@@ -8,35 +32,37 @@ mod scheme;
 
 pub use crate::scheme::Scheme;
 
-/// GitUrl represents an input url that is a url used by git
-/// Internally during parsing the url is sanitized and uses the `url` crate to perform
-/// the majority of the parsing effort, and with some extra handling to expose
-/// metadata used my many git hosting services
+/// GitUrl represents an input URL used by git hosting tools and repositories.
+///
+/// Parsing normalizes the input first, then uses the [`url`] crate for the
+/// generic URL handling before extracting Git-specific metadata.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct GitUrl {
-    /// The fully qualified domain name (FQDN) or IP of the repo
+    /// The fully qualified domain name (FQDN) or IP address of the repository.
     pub host: Option<String>,
-    /// The name of the repo
+    /// The repository name with any trailing `.git` suffix removed.
     pub name: String,
-    /// The owner/account/project name
+    /// The owner, account, or project segment directly associated with `name`.
     pub owner: Option<String>,
-    /// The organization name. Supported by Azure DevOps
+    /// The organization segment when the host encodes one explicitly.
+    ///
+    /// Azure DevOps URLs currently populate this field.
     pub organization: Option<String>,
-    /// The full name of the repo, formatted as "owner/name"
+    /// The canonical repository path assembled from the extracted metadata.
     pub fullname: String,
-    /// The git url scheme
+    /// The parsed transport or file scheme.
     pub scheme: Scheme,
-    /// The authentication user
+    /// The authentication username embedded in the input URL.
     pub user: Option<String>,
-    /// The oauth token (could appear in the https urls)
+    /// The password or token component embedded in the input URL.
     pub token: Option<String>,
-    /// The non-conventional port where git service is hosted
+    /// The explicit port number when one is present.
     pub port: Option<u16>,
-    /// The path to repo w/ respect to user + hostname
+    /// The normalized path portion relative to the host and auth fields.
     pub path: String,
-    /// Indicate if url uses the .git suffix
+    /// Whether the original path ended with `.git`.
     pub git_suffix: bool,
-    /// Indicate if url explicitly uses its scheme
+    /// Whether the original input explicitly spelled out its URL scheme.
     pub scheme_prefix: bool,
 }
 
@@ -83,7 +109,7 @@ impl fmt::Display for GitUrl {
                     format!(":{}", &self.path)
                 }
             }
-            _ => (&self.path).to_string(),
+            _ => self.path.to_string(),
         };
 
         let git_url_str = format!("{}{}{}{}{}", scheme_prefix, auth_info, host, port, path);
@@ -228,7 +254,7 @@ impl GitUrl {
                 let mut fullname: Vec<&str> = Vec::new();
 
                 // TODO: Add support for parsing out orgs from these urls
-                let hosts_w_organization_in_path = vec!["dev.azure.com", "ssh.dev.azure.com"];
+                let hosts_w_organization_in_path = ["dev.azure.com", "ssh.dev.azure.com"];
                 //vec!["dev.azure.com", "ssh.dev.azure.com", "visualstudio.com"];
 
                 let host_str = normalized.host_str().ok_or_else(|| FromStrError {
@@ -409,6 +435,9 @@ impl Display for NormalizeUrlError {
             NormalizeUrlErrorKind::UnsupportedSshPattern { url } => {
                 write!(f, "unsupported SSH pattern `{}`", url)
             }
+            NormalizeUrlErrorKind::UnsupportedWindowsPath { path } => {
+                write!(f, "unsupported absolute Windows path `{}`", path)
+            }
             NormalizeUrlErrorKind::UnsupportedScheme => write!(f, "unsupported URL scheme"),
         }
     }
@@ -420,6 +449,7 @@ impl Error for NormalizeUrlError {
             NormalizeUrlErrorKind::NullBytes => None,
             NormalizeUrlErrorKind::UrlParse(err) => Some(err),
             NormalizeUrlErrorKind::UnsupportedSshPattern { url: _ } => None,
+            NormalizeUrlErrorKind::UnsupportedWindowsPath { path: _ } => None,
             NormalizeUrlErrorKind::UnsupportedScheme => None,
         }
     }
@@ -433,6 +463,8 @@ pub enum NormalizeUrlErrorKind {
     UrlParse(url::ParseError),
     #[non_exhaustive]
     UnsupportedSshPattern { url: String },
+    #[non_exhaustive]
+    UnsupportedWindowsPath { path: String },
     #[non_exhaustive]
     UnsupportedScheme,
 }
@@ -453,6 +485,14 @@ pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
 
     // We're going to remove any trailing slash before running through Url::parse
     let url = url.trim_end_matches('/');
+
+    if is_absolute_windows_path(url) {
+        return Err(NormalizeUrlError {
+            kind: NormalizeUrlErrorKind::UnsupportedWindowsPath {
+                path: url.to_owned(),
+            },
+        });
+    }
 
     // Normalize short git url notation: git:host/path.
     // This is the same as matching Regex::new(r"^git:[^/]")
@@ -503,4 +543,21 @@ fn string_contains_asperand_before_colon(str: &str) -> bool {
         (Some(index_of_asperand), Some(index_of_colon)) => index_of_asperand < index_of_colon,
         _ => false,
     }
+}
+
+fn is_absolute_windows_path(url: &str) -> bool {
+    if let Some(path) = url.strip_prefix("file://") {
+        return is_windows_drive_path(path.trim_start_matches('/'));
+    }
+
+    is_windows_drive_path(url)
+}
+
+fn is_windows_drive_path(path: &str) -> bool {
+    let bytes = path.as_bytes();
+
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'/' | b'\\')
 }
