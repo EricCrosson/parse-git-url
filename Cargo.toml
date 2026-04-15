@@ -29,7 +29,6 @@ exclude = [
 name = "parse_git_url"
 path = "src/lib.rs"
 
-
 [dependencies]
 tracing = "0.1"
 url = "^2.2"
