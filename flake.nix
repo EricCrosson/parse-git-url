@@ -52,9 +52,9 @@
     in {
       default = pkgs.rustPlatform.buildRustPackage {
         pname = "parse-git-url";
-        version = "0.4.4";
+        version = "0.0.0-semantic-release-managed";
         inherit src;
-        cargoHash = "sha256-RrQ3voW2YPLUE3I6RMDb7zCI4LRm85XNN9k8AHSpOUY=";
+        cargoHash = "sha256-nZfqZO4mgSce8Ebmf/pZvMZ1efyd6sjECEwJSeQjJ7o=";
       };
     });
 
