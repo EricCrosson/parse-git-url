@@ -1,18 +1,9 @@
 {
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    pre-commit-hooks = {
-      url = "github:cachix/pre-commit-hooks.nix";
-      inputs.flake-utils.follows = "flake-utils";
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -20,71 +11,18 @@
   outputs = {
     self,
     nixpkgs,
-    crane,
-    fenix,
     flake-utils,
-    pre-commit-hooks,
+    git-hooks,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (system: let
-      fenix-channel = fenix.packages.${system}.latest;
-      fenix-toolchain = fenix-channel.withComponents [
-        "rustc"
-        "cargo"
-        "clippy"
-        "rust-analysis"
-        "rust-src"
-        "rustfmt"
-      ];
-
-      craneLib = crane.lib.${system}.overrideToolchain fenix-toolchain;
-
-      # Common derivation arguments used for all builds
-      commonArgs = {
-        src = craneLib.cleanCargoSource ./.;
-
-        # Add extra inputs here or any other derivation settings
-        # doCheck = true;
-        buildInputs = [
-          fenix-channel.rustc
-          fenix-channel.clippy
-        ];
+      pkgs = nixpkgs.legacyPackages.${system};
+      src = builtins.path {
+        path = ./.;
+        name = "source";
       };
-
-      # Build *just* the cargo dependencies, so we can reuse
-      # all of that work (e.g. via cachix) when running in CI
-      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-      # Run clippy (and deny all warnings) on the crate source,
-      # resuing the dependency artifacts (e.g. from build scripts or
-      # proc-macros) from above.
-      #
-      # Note that this is done as a separate derivation so it
-      # does not impact building just the crate by itself.
-      myCrateClippy = craneLib.cargoClippy (commonArgs
-        // {
-          # Again we apply some extra arguments only to this derivation
-          # and not every where else. In this case we add some clippy flags
-          inherit cargoArtifacts;
-          cargoClippyExtraArgs = "-- --deny warnings";
-        });
-
-      # Next, we want to run the tests and collect code-coverage, _but only if
-      # the clippy checks pass_ so we do not waste any extra cycles.
-      myCrateCoverage = craneLib.cargoNextest (commonArgs
-        // {
-          cargoArtifacts = myCrateClippy;
-        });
-
-      # Build the actual crate itself, reusing the dependency
-      # artifacts from above.
-      myCrate = craneLib.buildPackage (commonArgs
-        // {
-          inherit cargoArtifacts;
-        });
-
-      pre-commit-check = pre-commit-hooks.lib.${system}.run {
-        src = ./.;
+      pre-commit-check = git-hooks.lib.${system}.run {
+        inherit src;
         hooks = {
           actionlint.enable = true;
           alejandra.enable = true;
@@ -94,27 +32,33 @@
         };
       };
     in {
-      checks = {
-        inherit
-          myCrate
-          myCrateClippy
-          myCrateCoverage
-          pre-commit-check
-          ;
+      packages.default = pkgs.rustPlatform.buildRustPackage {
+        pname = "parse-git-url";
+        version = "0.4.4";
+        inherit src;
+        cargoHash = "sha256-RrQ3voW2YPLUE3I6RMDb7zCI4LRm85XNN9k8AHSpOUY=";
       };
-      devShells = {
-        default = nixpkgs.legacyPackages.${system}.mkShell {
-          buildInputs = commonArgs.buildInputs;
-          nativeBuildInputs = [
-            fenix-toolchain
-            fenix.packages.${system}.rust-analyzer
-            nixpkgs.legacyPackages.${system}.libiconv
+
+      checks = {
+        default = self.packages.${system}.default;
+        inherit pre-commit-check;
+      };
+
+      devShells.default = pkgs.mkShell {
+        packages =
+          (with pkgs; [
+            cargo
+            clippy
+            rust-analyzer
+            rustc
+            rustfmt
+          ])
+          ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            pkgs.libiconv
           ];
 
-          PROPTEST_CASES = 1000;
-
-          inherit (self.checks.${system}.pre-commit-check) shellHook;
-        };
+        PROPTEST_CASES = 1000;
+        inherit (pre-commit-check) shellHook;
       };
     });
 }

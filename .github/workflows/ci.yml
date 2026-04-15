@@ -6,4 +6,9 @@ on:
 
 jobs:
   test:
-    uses: semantic-release-action/rust/.github/workflows/ci.yml@v5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: DeterminateSystems/nix-installer-action@v20
+      - uses: DeterminateSystems/magic-nix-cache-action@v13
+      - run: nix flake check

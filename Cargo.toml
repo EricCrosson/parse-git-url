@@ -4,7 +4,7 @@ version = "0.4.4"
 edition = "2021"
 authors = [
   "T.J. Telan <t.telan@gmail.com>",
-  "Eric Crosson <eric.s.crosson@utexas.edu>"
+  "Eric Crosson <eric.s.crosson@utexas.edu>",
 ]
 license = "MIT"
 description = "A parser for git repo urls based on url crate"
@@ -22,7 +22,7 @@ exclude = [
   "/CHANGELOG.md",
   "/flake.{lock,nix}",
   "/package{,-lock}.json",
-  "/node_modules"
+  "/node_modules",
 ]
 
 [lib]
