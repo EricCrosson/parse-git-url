@@ -10,9 +10,9 @@ See: [4.1 Git on the Server - The Protocols](https://git-scm.com/book/en/v2/Git-
 
 Supports parsing SSH/HTTPS repo urls for:
 
-- Github
+- GitHub
 - Bitbucket
-- Azure Devops
+- Azure DevOps
 
 See [tests/parse.rs](tests/parse.rs) for expected output for a variety of inputs.
 
