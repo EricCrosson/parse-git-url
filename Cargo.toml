@@ -2,7 +2,7 @@
 name = "parse-git-url"
 version = "0.0.0-semantic-release-managed"
 edition = "2021"
-rust-version = "1.94"
+rust-version = "1.86"
 authors = [
   "T.J. Telan <t.telan@gmail.com>",
   "Eric Crosson <eric.s.crosson@utexas.edu>",
