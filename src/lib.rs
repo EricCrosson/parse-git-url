@@ -25,6 +25,7 @@
 use std::fmt::Display;
 use std::str::FromStr;
 use std::{error::Error, fmt};
+#[cfg(feature = "tracing")]
 use tracing::debug;
 use url::Url;
 
@@ -233,6 +234,7 @@ impl GitUrl {
 
         // Parse through path for name,owner,organization
         // Support organizations for Azure Devops
+        #[cfg(feature = "tracing")]
         debug!("The urlpath: {:?}", &urlpath);
 
         // Most git services use the path for metadata in the same way, so we're going to separate
@@ -243,6 +245,7 @@ impl GitUrl {
         //
         // organizations are going to be supported on a per-host basis
         let splitpath = &urlpath.rsplit_terminator('/').collect::<Vec<&str>>();
+        #[cfg(feature = "tracing")]
         debug!("rsplit results for metadata: {:?}", splitpath);
 
         let name = splitpath[0].trim_end_matches(".git").to_string();
@@ -264,6 +267,7 @@ impl GitUrl {
 
                 match hosts_w_organization_in_path.contains(&host_str) {
                     true => {
+                        #[cfg(feature = "tracing")]
                         debug!("Found a git provider with an org");
 
                         // The path differs between git:// and https:// schemes
@@ -320,7 +324,7 @@ impl GitUrl {
                                 return Err(FromStrError {
                                     url: url.to_owned(),
                                     kind: FromStrErrorKind::MalformedGitUrl,
-                                })
+                                });
                             }
                             1 => 0,
                             _ => 1,
@@ -388,10 +392,12 @@ fn normalize_ssh_url(url: &str) -> Result<Url, NormalizeUrlError> {
 
     match u.len() {
         2 => {
+            #[cfg(feature = "tracing")]
             debug!("Normalizing ssh url: {:?}", u);
             normalize_url(&format!("ssh://{}/{}", u[0], u[1]))
         }
         3 => {
+            #[cfg(feature = "tracing")]
             debug!("Normalizing ssh url with ports: {:?}", u);
             normalize_url(&format!("ssh://{}:{}/{}", u[0], u[1], u[2]))
         }
@@ -473,6 +479,7 @@ pub enum NormalizeUrlErrorKind {
 /// `ssh://` or `file://` urls that require more information to be added so that
 /// they can be parsed more effectively by `url::Url::parse()`
 pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
+    #[cfg(feature = "tracing")]
     debug!("Processing: {:?}", &url);
 
     // Error if there are null bytes within the url
@@ -517,10 +524,12 @@ pub fn normalize_url(url: &str) -> Result<Url, NormalizeUrlError> {
             // Otherwise we have Scheme::File
             match string_contains_asperand_before_colon(url) {
                 true => {
+                    #[cfg(feature = "tracing")]
                     debug!("Scheme::SSH match for normalization");
                     normalize_ssh_url(url)?
                 }
                 false => {
+                    #[cfg(feature = "tracing")]
                     debug!("Scheme::File match for normalization");
                     normalize_file_path(url)?
                 }
